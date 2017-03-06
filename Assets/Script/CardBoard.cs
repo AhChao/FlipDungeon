@@ -8,15 +8,19 @@ public class CardBoard : MonoBehaviour {
 	public GameObject[] card;//card prefab
 	private List<GameObject> cardList = new List<GameObject>();//all card obj on board
 	private List<GameCard> pickCard = new List<GameCard>();//the card you click
+	private List<GameCard> openWeapon = new List<GameCard>();//all card obj on board
 	private bool animFinish = true;//Is flip ani finish?
-	private int cardCount;
+	public int cardCount;
 	private int monsterPointTotal=10;
 	private int weaponPointTotal=11;
 	private int monsterPointNow=0;
 	private int weaponPointNow=0;
-	private int weaponOn=0;//1=on 0=off
-	private int monsterOn=0;//1=on 0=off
+	public int weaponOn=0;//1=on 0=off
+	public int monsterOn=0;//1=on 0=off
 	public GameCard lastMonster;//for unfilp last monster
+	public Vector2 CardPos;
+	public int wpViewCount=0;
+	private int clickTimes=0;
 
 	void guiUpdate(){
 		Text weaponP_label;
@@ -25,19 +29,32 @@ public class CardBoard : MonoBehaviour {
 		Text monsterP_label;
 		monsterP_label=GameObject.Find("monsterP").GetComponent<Text>();
 		monsterP_label.text="Monster Point\n"+monsterPointNow+"/"+monsterPointTotal+"(now/total)";
+		GameObject.Find("clickTimes").GetComponent<Text>().text="Click Times : "+clickTimes.ToString ()+" times";
 	}
-	IEnumerator unflipMonster(){
+
+	IEnumerator unflipMonster(GameCard target){
+		animFinish = false;
+		float angle=180;
 		while (true) {
-			float angle = Mathf.MoveTowards (lastMonster.transform.localEulerAngles.y, 180, 360 * Time.deltaTime);
-			lastMonster.transform.localRotation = Quaternion.Euler (new Vector3 (0, angle, 0));
-			if (angle == 180)
+			angle = Mathf.MoveTowards (angle, 0, 360 * Time.deltaTime);
+			target.transform.localRotation = Quaternion.Euler (new Vector3 (0, angle, 0));
+			if (angle == 0)
 				break;
 			yield return null;
 		}
+		animFinish = true;
+	}
+
+	IEnumerator waitFunc(){
+		yield return new WaitForSeconds (0.3f);
 	}
 
 	// Use this for initialization
 	void Start () {
+		if(GameObject.Find ("GameOver").GetComponent<SpriteRenderer> ().enabled==true)
+		 GameObject.Find ("GameOver").GetComponent<SpriteRenderer> ().enabled = false;
+		if(GameObject.Find ("YouWin").GetComponent<SpriteRenderer> ().enabled==true)
+		 GameObject.Find ("YouWin").GetComponent<SpriteRenderer> ().enabled = false;
 		guiUpdate();
 		//random array for setup card position
 		int[] order = new int[16]{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
@@ -47,6 +64,7 @@ public class CardBoard : MonoBehaviour {
 			order [i] = order [random];
 			order [random] = backup;
 		}
+
 		//4 monster cards
 		for (int i = 0; i < 4; i++) {
 			GameObject newCard = GameObject.Instantiate (card [i]);
@@ -103,6 +121,7 @@ public class CardBoard : MonoBehaviour {
 			RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition),Vector2.zero);
 			if(hit){
 				GameCard target = hit.transform.GetComponent<GameCard>();
+				CardPos = hit.transform.position;
 				if(target != null){
 					CheckCard(target);
 				}
@@ -115,24 +134,76 @@ public class CardBoard : MonoBehaviour {
 		if (!animFinish)
 			return;
 		if (!pickCard.Contains (target)) {
-			if (target.cardType == 1) {//monster card
+			clickTimes++;
+			if (target.cardType == 1 && target!=lastMonster) {//monster card
 				if (monsterOn != 1) {
 					monsterPointNow = target.point;
 					lastMonster = target;
+
+					Text Mptemp = GameObject.Find ("tempMp").GetComponent<Text> ();
+					Mptemp.text = target.point.ToString(); 
+					Mptemp.transform.position = Camera.main.WorldToScreenPoint(CardPos)+new Vector3(35,-35,0);
+
+
 					monsterOn = 1;
 				} else {//a monster card is open now
 					//unfilp last card
-					unflipMonster();
-					pickCard.Remove (lastMonster);
+					StartCoroutine (unflipMonster(lastMonster));
 					monsterPointNow = target.point;
 					lastMonster = target;
+
+					Text Mptemp = GameObject.Find ("tempMp").GetComponent<Text> ();
+					Mptemp.text = target.point.ToString(); 
+					Mptemp.transform.position = Camera.main.WorldToScreenPoint(CardPos)+new Vector3(35,-35,0);
+
 					monsterOn = 1;
+				}
+				if (weaponOn == 1 && monsterOn == 1) {
+					if (weaponPointNow >= monsterPointNow) { //kill the monster
+						StartCoroutine(waitFunc());
+						lastMonster.gameObject.SetActive (false);
+						weaponPointTotal -= weaponPointNow;
+						weaponPointNow = 0;
+						monsterPointTotal -= monsterPointNow;
+						monsterPointNow = 0;
+						foreach (GameCard c in openWeapon)
+							c.gameObject.SetActive (false);
+						openWeapon.Clear ();
+						monsterOn = 0;
+						weaponOn = 0;
+						cardCount -= 1;
+						GameObject.Find ("tempMp").GetComponent<Text> ().text =""; 
+						GameObject.Find ("tempWp1").GetComponent<Text> ().text="";
+						GameObject.Find ("tempWp2").GetComponent<Text> ().text="";
+						if(cardCount<=0)
+						 GameObject.Find ("YouWin").GetComponent<SpriteRenderer> ().enabled = true;
+					}
+					else { //kill by monster game over
+						Debug.Log("kill by Monster!!!");	
+						GameObject.Find ("GameOver").GetComponent<SpriteRenderer> ().enabled = true;
+						GameObject.Find ("tempMp").GetComponent<Text> ().text =""; 
+						GameObject.Find ("tempWp1").GetComponent<Text> ().text="";
+						GameObject.Find ("tempWp2").GetComponent<Text> ().text="";
+					}					
 				}
 			}
 			else if (target.cardType == 2) {//weapon card
 				//doNothing
+
+				if (wpViewCount == 0) {
+					Text Wptemp = GameObject.Find ("tempWp1").GetComponent<Text> ();
+					Wptemp.text = target.point.ToString(); 
+					Wptemp.transform.position = Camera.main.WorldToScreenPoint(CardPos)+new Vector3(35,-35,0);
+					wpViewCount++;
+				}
+				else if(wpViewCount == 1){
+					Text Wptemp = GameObject.Find ("tempWp2").GetComponent<Text> ();
+					Wptemp.text = target.point.ToString(); 
+					Wptemp.transform.position = Camera.main.WorldToScreenPoint(CardPos)+new Vector3(35,-35,0);
+				}
+
+				pickCard.Add (target);
 			}
-			pickCard.Add (target);
 			guiUpdate ();
 			StartCoroutine (FlipAnim (target, pickCard));
 		}
@@ -151,18 +222,54 @@ public class CardBoard : MonoBehaviour {
 
 		//Check if the cards choosed are the same
 		if (pickList.Count >= 2) {
+			wpViewCount = 0;
 			yield return new WaitForSeconds (0.3f);
 			//same cards
 			if (pickList [0].group == pickList [1].group) {
-				pickList [0].gameObject.SetActive (false);
-				pickList [1].gameObject.SetActive (false);
+				weaponOn = 1;
+				weaponPointNow = weaponPointNow + pickList [0].point;
+				if (monsterOn == 1) {
+					if (weaponPointNow >= monsterPointNow) { //kill the monster
+						pickList [0].gameObject.SetActive (false);
+						pickList [1].gameObject.SetActive (false);
+						lastMonster.gameObject.SetActive (false);
+						weaponPointTotal -= weaponPointNow;
+						weaponPointNow = 0;
+						monsterPointTotal -= monsterPointNow;
+						monsterPointNow = 0;
+						foreach (GameCard c in openWeapon)
+							c.gameObject.SetActive (false);
+						openWeapon.Clear ();
+						monsterOn = 0;
+						weaponOn = 0;
+						cardCount -= 1;
+						GameObject.Find ("tempMp").GetComponent<Text> ().text =""; 
+						GameObject.Find ("tempWp1").GetComponent<Text> ().text="";
+						GameObject.Find ("tempWp2").GetComponent<Text> ().text="";
+						if(cardCount<=0)
+							GameObject.Find ("YouWin").GetComponent<SpriteRenderer> ().enabled = true;
+					}
+					else { //kill by monster game over
+						Debug.Log("kill by Monster!!!");
+						GameObject.Find ("GameOver").GetComponent<SpriteRenderer> ().enabled = true;
+						GameObject.Find ("tempMp").GetComponent<Text> ().text = ""; 
+						GameObject.Find ("tempWp1").GetComponent<Text> ().text="";
+						GameObject.Find ("tempWp2").GetComponent<Text> ().text="";
+					}
+				}
+				else {
+					openWeapon.Add (pickList [0]);
+					openWeapon.Add (pickList [1]);
+				}
 				cardCount -= 2;
 				if (cardCount <= 0) {
-					Debug.Log ("GameOver");
+					Debug.Log ("GameOver : Card Run Out");
 				}
 			}
 			//different cards
 			else {
+				GameObject.Find ("tempWp1").GetComponent<Text> ().text="";
+				GameObject.Find ("tempWp2").GetComponent<Text> ().text="";
 				float angle = 180;
 				while (true) {
 					angle = Mathf.MoveTowards (angle, 0, 360 * Time.deltaTime);
@@ -174,6 +281,7 @@ public class CardBoard : MonoBehaviour {
 				}
 			}
 			pickList.Clear ();//clear the record of choosing cards
+			guiUpdate();
 		}
 		animFinish = true;
 	}
