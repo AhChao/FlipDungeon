@@ -159,8 +159,8 @@ public class CardBoard : MonoBehaviour {
 					monsterOn = 1;
 				}
 				if (weaponOn == 1 && monsterOn == 1) {
+					StartCoroutine(waitFunc());
 					if (weaponPointNow >= monsterPointNow) { //kill the monster
-						StartCoroutine(waitFunc());
 						lastMonster.gameObject.SetActive (false);
 						weaponPointTotal -= weaponPointNow;
 						weaponPointNow = 0;
