@@ -19,5 +19,5 @@ Filp the Cards!
 	- So Combine the Weapon Power to defeat The Strong Moster!
 ![Alt text](/img/combine.png)
 
-**網頁展示**
+**Web Demo**
 - https://ahchao.github.io/FlipDungeon/
